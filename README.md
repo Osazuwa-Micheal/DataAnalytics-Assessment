@@ -1,4 +1,4 @@
-# DataAnalytics-Assessment
+# DataAnalytics-SQL Project
 
 ## Question 1: High-Value Customers with Multiple Products
 
@@ -145,3 +145,79 @@ This summary includes:
 - `frequency_category`: The label (High, Medium, Low).
 - `customer_count`: The total number of customers in each category.
 - `avg_transaction_per_month`: The average of the average monthly transactions in each category. This helps me understand how active each group is on average.
+
+## Question 3: Account Inactivity Alert
+
+###  Inactive Accounts SQL Query Explanation
+
+This SQL query is used to identify **savings** or **investment** accounts that have not received any successful inflow transactions in the past **365 days**, as of **April 18, 2025**. It is useful for tracking account inactivity, flagging dormant users, or triggering re-engagement workflows.
+
+---
+
+##  Step 1: Common Table Expression (CTE) — `last_successful_tx`
+
+```sql
+WITH last_successful_tx AS (
+    SELECT 
+        a.id AS account_id,
+        MAX(DATE(b.transaction_date)) AS last_inflow_date,
+        a.is_regular_savings AS saving,
+        a.is_a_fund AS invest,
+        a.is_archived
+    FROM plans_plan a
+    LEFT JOIN savings_savingsaccount b ON a.id = b.plan_id
+    WHERE b.transaction_status = 'success'
+    GROUP BY a.id, a.is_regular_savings, a.is_a_fund, a.is_archived
+)
+```
+
+###  What this does:
+- Joins the `plans_plan` table (containing account/plan details) with the `savings_savingsaccount` table (containing transaction data).
+- Filters only **successful transactions** using:  
+  `WHERE b.transaction_status = 'success'`
+- For each account/plan, it selects:
+  - `account_id`: Unique identifier of the plan.
+  - `last_inflow_date`: The most recent successful inflow date.
+  - Flags indicating if the account is:
+    - a **savings** account (`saving = 1`)
+    - an **investment** account (`invest = 1`)
+  - `is_archived`: Whether the account is archived.
+- Uses `LEFT JOIN` to include accounts even if they have no transaction history.
+- Groups by account and flags to ensure accurate aggregation.
+
+---
+
+##  Step 2: Main Query — Filter Inactive Accounts
+
+```sql
+SELECT 
+    account_id,
+    CASE 
+        WHEN saving = 1 THEN 'savings'
+        WHEN invest = 1 THEN 'investment'
+    END AS account_type,
+    last_inflow_date,
+    DATEDIFF('2025-04-18', last_inflow_date) AS inactivity_days
+FROM last_successful_tx
+WHERE 
+    is_archived = 0
+    AND (saving = 1 OR invest = 1)
+    AND DATEDIFF('2025-04-18', last_inflow_date) > 365;
+```
+
+###  What this does:
+- Filters the results from the CTE to return:
+  - Only **active accounts** (`is_archived = 0`)
+  - Only **savings** or **investment** accounts (`saving = 1 OR invest = 1`)
+  - Accounts where the last successful inflow was **more than 365 days ago**.
+- Returns the following fields:
+  - `account_id`: Unique ID of the account.
+  - `account_type`: Either `'savings'` or `'investment'` based on the flags.
+  - `last_inflow_date`: Date of the most recent successful transaction.
+  - `inactivity_days`: Number of days the account has been inactive as of `'2025-04-18'`.
+
+---
+
+
+
+
