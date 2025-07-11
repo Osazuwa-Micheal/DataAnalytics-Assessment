@@ -216,8 +216,82 @@ WHERE
   - `last_inflow_date`: Date of the most recent successful transaction.
   - `inactivity_days`: Number of days the account has been inactive as of `'2025-04-18'`.
 
+
+
+## Question 4: Customer Lifetime Value (CLV) Estimation
+
+
+This query estimates **Customer Lifetime Value (CLV)** based on account tenure and transaction volume using a simplified business model.
+
+---
+
+## Scenario
+
+Marketing wants to estimate CLV for each user based on:
+- **Account tenure** (in months since signup),
+- **Transaction volume** (number and amount of transactions),
+- **Profit per transaction**: assumed to be **0.1%** (0.001) of the transaction amount.
+
+---
+
+##  CLV Formula
+
+We use the formula:
+
+```
+CLV = (total_transactions / tenure_months) * 12 * avg_profit_per_transaction
+```
+
+- `tenure_months`: Months since user joined
+- `avg_profit_per_transaction = total_profit / total_transactions`
+- `total_profit = SUM(transaction_amount * 0.001)`
+
 ---
 
 
+##  SQL Query
+
+```sql
+WITH Account_Tenure AS (
+    SELECT  
+        c.id AS customer_id, 
+        CONCAT_WS(' ', c.first_name, c.last_name) AS name,
+        TIMESTAMPDIFF(MONTH, c.date_joined, '2025-04-18') AS tenure_months,
+        COUNT(b.id) AS total_transactions,
+        SUM(b.amount * 0.001) AS total_profit
+    FROM users_customuser c
+    JOIN savings_savingsaccount b ON b.owner_id = c.id
+    WHERE b.transaction_status = 'success'
+    GROUP BY c.id, c.first_name, c.last_name, c.date_joined
+)
+
+SELECT 
+    customer_id, 
+    name, 
+    tenure_months,
+    total_transactions,
+    CASE 
+        WHEN tenure_months = 0 THEN 0
+        ELSE (total_transactions / tenure_months) * 12 * (total_profit / total_transactions)
+    END AS estimated_clv
+FROM Account_Tenure
+ORDER BY estimated_clv DESC;
+```
+
+---
+
+##  Explanation
+
+### Step 1: CTE (`Account_Tenure`)
+- Joins users with their successful transactions.
+- Calculates:
+  - `tenure_months`: Time between signup and reference date (`2025-04-18`).
+  - `total_transactions`: Count of successful transactions.
+  - `total_profit`: 0.1% of transaction value summed per customer.
+
+### Step 2: Final Output
+- Calculates `estimated_clv` using the defined formula.
+- Includes a `CASE` block to avoid dividing by zero if `tenure_months = 0`.
+- Sorts the output by `estimated_clv` in descending order to highlight highest value customers.
 
 
